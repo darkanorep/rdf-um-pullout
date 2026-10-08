@@ -29,3 +29,4 @@ class RoleRequest extends FormRequest
         ];
     }
 }
+
