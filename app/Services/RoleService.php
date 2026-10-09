@@ -9,12 +9,12 @@ class RoleService
 {
     public function __construct(private readonly Role $role) {}
 
-    public function getAllRoles(int $perPage = 15) : LengthAwarePaginator
+    public function getAllRoles() 
     {
-        return $this->role->query()->paginate($perPage);
+        return $this->role->query()->orderBy('updated_at', 'desc')->useFilters()->dynamicPaginate();
     }
 
-    public function storeRole(array $data): Role
+    public function storeRole(array $data): Raole
     {
         return $this->role->create($data);
     }

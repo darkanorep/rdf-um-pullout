@@ -14,9 +14,9 @@ class UserService
      */
     public function __construct(private readonly User $user) {}
 
-    public function getAllUsers(int $perPage = 15) : LengthAwarePaginator
+    public function getAllUsers() : LengthAwarePaginator
     {
-        return $this->user->query()->paginate($perPage);
+        return $this->user->query()->orderBy('updated_at', 'desc')->useFilters()->dynamicPaginate();
     }
 
     public function storeUser(array $data): User
