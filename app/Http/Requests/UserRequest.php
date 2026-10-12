@@ -30,6 +30,7 @@ class UserRequest extends FormRequest
             'suffix' => 'nullable|string',
             'position' => 'required|string',
             'username' => 'required|string|unique:users,username,' . $this->user?->id,
+            'role_id' => 'required|exists:roles,id',
         ];
     }
 }

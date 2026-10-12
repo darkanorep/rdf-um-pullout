@@ -16,7 +16,7 @@ class UserService
 
     public function getAllUsers() : LengthAwarePaginator
     {
-        return $this->user->query()->orderBy('updated_at', 'desc')->useFilters()->dynamicPaginate();
+        return $this->user->query()->with(['roles'])->orderBy('updated_at', 'desc')->useFilters()->dynamicPaginate();
     }
 
     public function storeUser(array $data): User
