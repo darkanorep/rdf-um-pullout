@@ -1,19 +1,15 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Controllers;
 
 use App\Http\Requests\RoleRequest;
 use App\Http\Resources\RoleResource;
 use App\Models\Role;
 use App\Services\RoleService;
-use Essa\APIToolKit\Api\ApiResponse;
-use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 class RoleController extends Controller
 {
-    use ApiResponse;
-
     public function __construct(private readonly RoleService $roleService) {}
 
     public function store(RoleRequest $request) {
@@ -56,11 +52,11 @@ class RoleController extends Controller
     {
         $data = $request->validated();
 
-        $updatedUser = $this->roleService->updateRole($data, $role);
+        $updatedRole = $this->roleService->updateRole($data, $role);
 
         return $this->responseAccepted(
             message: 'Role updated successfully.',
-            data: new RoleResource($updatedUser)
+            data: new RoleResource($updatedRole)
         );
     }
 

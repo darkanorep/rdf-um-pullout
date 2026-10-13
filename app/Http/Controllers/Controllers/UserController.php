@@ -1,17 +1,14 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Controllers;
 
 use App\Http\Requests\UserRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Services\UserService;
-use Essa\APIToolKit\Api\ApiResponse;
-use Illuminate\Http\Request;
 
 class UserController extends Controller
 {
-    use ApiResponse;
     public function __construct(private readonly UserService $userService) {}
 
     public function store(UserRequest $request) {
