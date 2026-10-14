@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Controllers;
+namespace App\Http\Controllers;
 
 use App\Http\Requests\ItemRequest;
 use App\Http\Resources\ItemResource;
