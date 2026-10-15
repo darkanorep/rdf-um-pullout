@@ -23,9 +23,10 @@ class UserResource extends JsonResource
             'suffix' => $this->suffix,
             'position' => $this->position,
             'username' => $this->username,
+            'role' => new RoleResource($this->roles),
+            'warehouse' => new WarehouseResource($this->warehouses),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
-            'role' => new RoleResource($this->roles),
         ];
     }
 }
