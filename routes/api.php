@@ -9,6 +9,8 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::resource('roles', \App\Http\Controllers\RoleController::class);
     Route::resource('items', \App\Http\Controllers\ItemController::class);
     Route::resource('categories', \App\Http\Controllers\CategoryController::class);
+    Route::resource('units-of-measurement', \App\Http\Controllers\UnitOfMeasurementController::class)
+        ->parameters(['units-of-measurement' => 'unitOfMeasurement']);
 
     Route::post('logout', [\App\Http\Controllers\AuthController::class, 'logout']);
 });
