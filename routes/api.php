@@ -11,6 +11,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::resource('categories', \App\Http\Controllers\CategoryController::class);
     Route::resource('units-of-measurement', \App\Http\Controllers\UnitOfMeasurementController::class)
         ->parameters(['units-of-measurement' => 'unitOfMeasurement']);
+    Route::resource('warehouses', \App\Http\Controllers\WarehouseController::class);
 
     Route::post('logout', [\App\Http\Controllers\AuthController::class, 'logout']);
 });
