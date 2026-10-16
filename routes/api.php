@@ -12,6 +12,10 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::resource('units-of-measurement', \App\Http\Controllers\UnitOfMeasurementController::class)
         ->parameters(['units-of-measurement' => 'unitOfMeasurement']);
     Route::resource('warehouses', \App\Http\Controllers\WarehouseController::class);
+    Route::post('account-titles/sync', [\App\Http\Controllers\AccountTitleController::class, 'sync']);
+    Route::get('account-titles', [\App\Http\Controllers\AccountTitleController::class, 'index']);
+    Route::post('charges/sync', [\App\Http\Controllers\ChargeController::class, 'sync']);
+    Route::get('charges', [\App\Http\Controllers\ChargeController::class, 'index']);
 
     Route::post('logout', [\App\Http\Controllers\AuthController::class, 'logout']);
 });
