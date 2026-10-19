@@ -24,12 +24,15 @@ class AccountTitleController extends Controller
     {
         $accountTitles = $this->accountTitleService->getAllAccountTitles();
 
-        if (empty($accountTitles->items())) {
+        if ($accountTitles->isEmpty()) {
             return $this->responseNotFound(message: 'No account titles found.');
         }
 
         return $accountTitles instanceof LengthAwarePaginator
-            ? $accountTitles->through(fn($item) => new AccountTitleResource($item))
-            : $this->responseSuccess('Account titles retrieved successfully.', AccountTitleResource::collection($accountTitles));
+            ? $accountTitles->through(fn ($item) => new AccountTitleResource($item))
+            : $this->responseSuccess(
+                'Account titles retrieved successfully.',
+                AccountTitleResource::collection($accountTitles)
+            );
     }
 }
