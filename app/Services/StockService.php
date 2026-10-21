@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Inventory;
 use App\Models\Stock;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 
@@ -12,7 +13,8 @@ class StockService
 {
     public function __construct(private readonly Stock $stock) {}
 
-    public function getStock() {
+    public function getStock()
+    {
         return $this->stock->query()
             ->with(['inventories'])
             ->orderBy('updated_at', 'desc')->useFilters()->dynamicPaginate();
@@ -20,13 +22,29 @@ class StockService
 
     public function storeStock(array $data): Stock
     {
-        return DB::transaction(function () use ($data) {
-            $stock = $this->stock->create(Arr::except($data, 'inventory'));
+        for ($attempt = 1; $attempt <= 3; $attempt++) {
+            try {
+                return DB::transaction(function () use ($data) {
+                    $stock = $this->stock->create(Arr::except($data, 'inventory'));
 
-            $stock->inventories()->createMany($data['inventory']);
+                    $stock->inventories()->createMany($data['inventory']);
 
-            return $stock->load('inventories');
-        });
+                    return $stock->load('inventories');
+                });
+            } catch (QueryException $exception) {
+                if (! $this->isDuplicateBatchNumber($exception) || $attempt === 3) {
+                    throw $exception;
+                }
+            }
+        }
+
+        throw new \LogicException('Unable to create stock.');
+    }
+
+    private function isDuplicateBatchNumber(QueryException $exception): bool
+    {
+        return $exception->getCode() === '23000'
+            && str_contains($exception->getMessage(), 'stocks_batch_no_unique');
     }
 
     public function findById(int $id): ?Stock
@@ -62,6 +80,7 @@ class StockService
 
             if ($id === null) {
                 $keepIds[] = $stock->inventories()->create($line)->id;
+
                 continue;
             }
 
@@ -76,7 +95,8 @@ class StockService
         $stock->inventories()->whereNotIn('id', $keepIds)->delete();
     }
 
-    public function destroyStock(int $id): void {
+    public function destroyStock(int $id): void
+    {
         $stock = $this->stock->withTrashed()->find($id);
         if ($stock->trashed()) {
             $stock->restore();

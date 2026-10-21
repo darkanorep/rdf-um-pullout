@@ -12,9 +12,24 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 #[Guarded([])]
 class Stock extends Model
 {
-    use SoftDeletes, Filterable;
+    use Filterable, SoftDeletes;
 
     protected string $default_filters = StockFilters::class;
+
+    protected static function booted(): void
+    {
+        static::creating(function (Stock $stock): void {
+            $prefix = now()->format('ymd');
+            $lastBatchNumber = static::query()
+                ->where('batch_no', 'like', $prefix.'-%')
+                ->max('batch_no');
+            $nextNumber = $lastBatchNumber
+                ? ((int) substr($lastBatchNumber, strlen($prefix) + 1)) + 1
+                : 1;
+
+            $stock->batch_no = $prefix.'-'.str_pad((string) $nextNumber, 5            , '0', STR_PAD_LEFT);
+        });
+    }
 
     public function inventories(): HasMany
     {

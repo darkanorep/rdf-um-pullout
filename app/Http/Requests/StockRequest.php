@@ -29,6 +29,7 @@ class StockRequest extends FormRequest
             'inventory' => 'array|required',
             'inventory.*.item_id' => 'integer|required|exists:items,id',
             'inventory.*.uom_id' => 'integer|required|exists:unit_of_measurements,id',
+            'inventory.*.quantity_received' => 'integer|required',
             'inventory.*.actual_received' => 'integer|required',
             'inventory.*.account_title_id' => 'integer|required|exists:account_titles,id',
         ];
