@@ -18,6 +18,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::get('charges', [\App\Http\Controllers\ChargeController::class, 'index']);
 
     Route::resource('stocks', \App\Http\Controllers\StockController::class)->only(['index', 'store', 'show', 'update', 'destroy']);
+    Route::resource('misc-receipts', \App\Http\Controllers\MiscellaneousReceiptController::class)->only(['index', 'store', 'show', 'update', 'destroy']);
 
     Route::post('logout', [\App\Http\Controllers\AuthController::class, 'logout']);
 });
