@@ -10,7 +10,9 @@ class ItemService
 
     public function getAllItems()
     {
-        return $this->item->query()->orderBy('updated_at', 'desc')->useFilters()->dynamicPaginate();
+        return $this->item->query()
+            ->with(['warehouse', 'category', 'unitOfMeasurement'])
+            ->orderBy('updated_at', 'desc')->useFilters()->dynamicPaginate();
     }
 
     public function storeItem(array $data): Item
@@ -20,7 +22,7 @@ class ItemService
 
     public function findById(int $id): ?Item
     {
-        return $this->item->find($id);
+        return $this->item->with(['warehouse', 'category', 'unitOfMeasurement'])->find($id);
     }
 
     public function updateItem(array $data, Item $item): Item {

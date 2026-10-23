@@ -26,6 +26,9 @@ class ItemRequest extends FormRequest
             'code' => 'required|string|unique:items,code,' . $this->item?->id,
             'name' => 'required|string|unique:items,name,' . $this->item?->id,
             'slug' => 'nullable|string|unique:items,slug,' . $this->item?->id,
+            'uom_id' => 'required|integer|exists:unit_of_measurements,id',
+            'category_id' => 'required|integer|exists:categories,id',
+            'warehouse_id' => 'required|integer|exists:warehouses,id'
         ];
     }
 }

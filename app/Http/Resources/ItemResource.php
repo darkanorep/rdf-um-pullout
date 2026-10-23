@@ -19,6 +19,9 @@ class ItemResource extends JsonResource
             'code' => $this->code,
             'name' => $this->name,
             'slug' => $this->slug,
+            'uom' => new UnitOfMeasurementResource($this->whenLoaded('unitOfMeasurement')),
+            'category' => new CategoryResource($this->whenLoaded('category')),
+            'warehouse' => new WarehouseResource($this->whenLoaded('warehouse')),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];
