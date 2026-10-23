@@ -23,21 +23,14 @@ class MiscellaneousReceiptRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'stock_id' => ['required', 'integer', 'exists:stocks,id'],
             'transaction_date' => ['required', 'date'],
-            'miscellaneous_receipt_inventory' => 'array|required',
-            'miscellaneous_receipt_inventory.*.inventory_id' => 'integer|required|exists:inventories,id',
-            'miscellaneous_receipt_inventory.*.quantity' => 'integer|required',
-            'miscellaneous_receipt_inventory.*.account_title_id' => 'integer|required|exists:account_titles,id',
-            'miscellaneous_receipt_inventory.*.remarks' => 'nullable|required',
-
-        ];
-    }
-
-    public function attributes(): array
-    {
-        return [
-            'stock_id' => 'Stock',
+            'description' => ['required', 'string'],
+            'remarks' => ['required', 'string'],
+            'miscellaneous_inventory' => 'array|required',
+            'miscellaneous_inventory.*.item_id' => 'integer|required|exists:items,id',
+            'miscellaneous_inventory.*.uom_id' => 'integer|required|exists:unit_of_measurements,id',
+            'miscellaneous_inventory.*.account_title_id' => 'integer|required|exists:account_titles,id',
+            'miscellaneous_inventory.*.quantity' => 'integer|required',
         ];
     }
 }

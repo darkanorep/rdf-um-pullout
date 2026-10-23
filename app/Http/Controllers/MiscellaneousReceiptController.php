@@ -59,7 +59,7 @@ class MiscellaneousReceiptController extends Controller
 
     public function destroy(int $id)
     {
-        $this->miscellaneousReceiptsService->destroyMiscellaneousReceipt($id);
+        $this->miscellaneousReceiptsService->deleteMiscellaneousReceipt($id);
 
         return $this->responseAccepted(
             message: 'Miscellaneous Receipt status updated successfully.'

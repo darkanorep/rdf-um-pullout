@@ -13,8 +13,9 @@ return new class extends Migration
     {
         Schema::create('miscellaneous_receipts', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('stock_id')->nullable()->constrained('stocks');
             $table->date('transaction_date')->nullable();
+            $table->string('description')->nullable();
+            $table->text('remarks')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });

@@ -7,6 +7,8 @@ use Essa\APIToolKit\Filters\Filterable;
 use Illuminate\Database\Eloquent\Attributes\Guarded;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Guarded([])]
@@ -16,8 +18,12 @@ class MiscellaneousReceipt extends Model
 
     protected string $default_filters = MiscellaneousReceiptFilters::class;
 
-    public function stocks() : BelongsTo
+    public function miscellaneousInventory(): HasMany
     {
-        return $this->belongsTo(Stock::class, 'stock_id', 'id');
+        return $this->hasMany(
+            MiscellaneousInventory::class,
+            'misc_receipt_id',
+            'id'
+        );
     }
 }

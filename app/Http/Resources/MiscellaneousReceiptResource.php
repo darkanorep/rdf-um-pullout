@@ -15,8 +15,13 @@ class MiscellaneousReceiptResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
+            'id' => $this->id,
             'transaction_date' => $this->transaction_date,
-            'stock' => new StockResource($this->whenLoaded('stocks')),
+            'description' => $this->description,
+            'remarks' => $this->remarks,
+            'miscellaneous_inventory' => MiscellaneousInventoryResource::collection($this->whenLoaded('miscellaneousInventory')),
+            'updated_at' => $this->updated_at,
+            'deleted_at' => $this->deleted_at,
         ];
     }
 }
