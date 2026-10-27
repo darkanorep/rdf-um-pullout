@@ -24,7 +24,7 @@ class ChargeController extends Controller
     {
         $charges = $this->chargeService->getAllCharges();
 
-        if (empty($charges->items())) {
+        if ($charges->isEmpty()) {
             return $this->responseNotFound(message: 'No charges found.');
         }
 

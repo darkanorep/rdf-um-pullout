@@ -16,7 +16,7 @@ class ItemController extends Controller
     {
         $items = $this->itemService->getAllItems();
 
-        if (empty($items->items())) {
+        if ($items->isEmpty()) {
             return $this->responseNotFound(message: 'No items found.');
         }
 

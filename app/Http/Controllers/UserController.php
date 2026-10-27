@@ -25,7 +25,7 @@ class UserController extends Controller
     {
         $users = $this->userService->getAllUsers();
 
-        if (empty($users->items())) {
+        if ($users->isEmpty()) {
             return $this->responseNotFound(message: 'No users found.');
         }
 

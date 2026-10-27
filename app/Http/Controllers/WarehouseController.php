@@ -16,7 +16,7 @@ class WarehouseController extends Controller
     {
         $warehouses = $this->warehouseService->getWarehouses();
 
-        if (empty($warehouses->items())) {
+        if ($warehouses->isEmpty()) {
             return $this->responseNotFound(message: 'No warehouses found.');
         }
 

@@ -19,7 +19,7 @@ class CategoryController extends Controller
     {
         $items = $this->categoryService->getAllCategories();
 
-        if (empty($items->items())) {
+        if ($items->isEmpty()) {
             return $this->responseNotFound(message: 'No categories found.');
         }
 

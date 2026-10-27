@@ -16,7 +16,7 @@ class UnitOfMeasurementController extends Controller
     {
         $uoms = $this->unitOfMeasurementService->getAllUnitOfMeasurements();
 
-        if (empty($uoms->items())) {
+        if ($uoms->isEmpty()) {
             return $this->responseNotFound(message: 'No UOMs found.');
         }
 
