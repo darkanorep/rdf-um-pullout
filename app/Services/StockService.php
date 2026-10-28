@@ -104,4 +104,66 @@ class StockService
             $stock->delete();
         }
     }
+
+    public function getStockOnHand()
+    {
+        $movedQuantity = <<<'SQL'
+        COALESCE((
+            SELECT SUM(mi.quantity)
+            FROM move_inventories AS mi
+            WHERE mi.inventory_id = inventories.id
+              AND mi.deleted_at IS NULL
+        ), 0)
+        SQL;
+
+        $hasRemainingStock = static fn ($query) => $query->whereRaw(
+            "inventories.actual_received - ({$movedQuantity}) > 0"
+        );
+
+        $stocks = $this->stock->query()
+            ->whereHas('inventories', $hasRemainingStock)
+            ->with([
+                'inventories' => static function ($query) use ($movedQuantity) {
+                    $query->addSelect('inventories.*')
+                        ->selectRaw(
+                            "inventories.actual_received - ({$movedQuantity}) AS remaining_stock"
+                        )
+                        ->whereRaw(
+                            "inventories.actual_received - ({$movedQuantity}) > 0"
+                        );
+                },
+                'inventories.moveInventory',
+            ])
+            ->orderBy('updated_at', 'desc')
+            ->useFilters()
+            ->dynamicPaginate();
+
+        $inventoryRecords = $stocks->flatMap(function ($stock) {
+            return $stock->inventories->map(function ($inventory) use ($stock) {
+                $inventory->setAttribute('source_stock', [
+                    'id' => $stock->id,
+                    'batch_no' => $stock->batch_no,
+                    'received_date' => $stock->received_date,
+                    'supplier_name' => $stock->supplier_name,
+                ]);
+
+                return $inventory;
+            });
+        });
+
+        return $inventoryRecords
+            ->groupBy('item_id')
+            ->map(fn ($records, $itemId) => [
+                'item_id' => (int) $itemId,
+                'item_code' => $records->first()->item->code,
+                'item_name' => $records->first()->item->name,
+                'uom_id' => $records->first()->uom_id,
+                'uom' => $records->first()->uom->name,
+                'remaining_stock' => $records->sum(
+                    fn ($inventory) => (float) $inventory->remaining_stock
+                ),
+                'records' => $records->values(),
+            ])
+            ->values();
+    }
 }

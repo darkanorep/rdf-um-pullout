@@ -24,6 +24,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::resource('move-orders', \App\Http\Controllers\MoveOrderController::class)
 //        ->parameters(['move-orders' => 'moveOrder'])
         ->only(['index', 'store', 'show', 'update', 'destroy']);
+    Route::get('stock-on-hand', [\App\Http\Controllers\StockController::class, 'getStockOnHand']);
 
     Route::post('logout', [\App\Http\Controllers\AuthController::class, 'logout']);
 });

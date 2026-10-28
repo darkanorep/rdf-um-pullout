@@ -30,4 +30,8 @@ class Inventory extends Model
     public function accountTitle(): BelongsTo {
         return $this->belongsTo(AccountTitle::class, 'account_title_id');
     }
+
+    public function moveInventory(): HasOne {
+        return $this->hasOne(MoveInventory::class);
+    }
 }
