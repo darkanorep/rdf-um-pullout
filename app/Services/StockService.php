@@ -49,7 +49,7 @@ class StockService
 
     public function findById(int $id): ?Stock
     {
-        return $this->stock->find($id);
+        return $this->stock->with(['inventories'])->find($id);
     }
 
     public function updateStock(array $data, Stock $stock): Stock
@@ -103,5 +103,84 @@ class StockService
         } else {
             $stock->delete();
         }
+    }
+
+    public function getStockOnHand()
+    {
+        $movedQuantity = <<<'SQL'
+        COALESCE((
+            SELECT SUM(mi.quantity)
+            FROM move_inventories AS mi
+            WHERE mi.inventory_id = inventories.id
+              AND mi.deleted_at IS NULL
+        ), 0)
+        SQL;
+
+        $remainingStock = "inventories.actual_received - ({$movedQuantity})";
+
+        $hasRemainingStock = static fn ($query) => $query->whereRaw(
+            "{$remainingStock} > 0"
+        );
+
+        $stocks = $this->stock->query()
+            ->whereHas('inventories', $hasRemainingStock)
+            ->with([
+                'inventories' => static function ($query) use (
+                    $movedQuantity,
+                    $remainingStock
+                ) {
+                    $query->addSelect('inventories.*')
+                        ->selectRaw("{$remainingStock} AS remaining_stock")
+                        ->whereRaw("{$remainingStock} > 0");
+                },
+                'inventories.moveInventories',
+                'inventories.accountTitle',
+                'inventories.item',
+                'inventories.uom',
+            ])
+            ->orderByDesc('received_date')
+            ->orderByDesc('id')
+            ->useFilters()
+            ->dynamicPaginate();
+
+        $inventoryRecords = $stocks->flatMap(function ($stock) {
+            return $stock->inventories->map(function ($inventory) use ($stock) {
+                $inventory->setAttribute('source_stock', [
+                    'id' => $stock->id,
+                    'batch_no' => $stock->batch_no,
+                    'received_date' => $stock->received_date,
+                    'supplier_name' => $stock->supplier_name,
+                ]);
+
+                return $inventory;
+            });
+        });
+
+        return $inventoryRecords
+            ->groupBy('item_id')
+            ->map(function ($records, $itemId) {
+                $availableRecord = $records->first(
+                    fn ($inventory) =>
+                        (float) $inventory->getRawOriginal('remaining_stock') > 0
+                );
+
+                $firstRecord = $records->first();
+
+                return [
+                    'item_id' => (int) $itemId,
+                    'inventory_id' => $availableRecord?->id,
+                    'item_code' => $firstRecord->item->code,
+                    'item_name' => $firstRecord->item->name,
+                    'uom_id' => $firstRecord->uom_id,
+                    'uom' => $firstRecord->uom->name,
+                    'remaining_stock' => $records->sum(
+                        fn ($inventory) =>
+                        (float) $inventory->getRawOriginal('remaining_stock')
+                    ),
+                    'account_title' => $availableRecord?->accountTitle,
+                    'records' => $records->values(),
+                ];
+            })
+            ->values();
     }
 }

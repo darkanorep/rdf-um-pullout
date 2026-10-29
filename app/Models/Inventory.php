@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Attributes\Guarded;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -29,5 +30,10 @@ class Inventory extends Model
 
     public function accountTitle(): BelongsTo {
         return $this->belongsTo(AccountTitle::class, 'account_title_id');
+    }
+
+    public function moveInventories(): HasMany
+    {
+        return $this->hasMany(MoveInventory::class, 'inventory_id');
     }
 }

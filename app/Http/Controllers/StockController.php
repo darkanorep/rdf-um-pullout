@@ -69,4 +69,18 @@ class StockController extends Controller
             message: 'Stock status updated successfully.'
         );
     }
+
+    public function getStockOnHand()
+    {
+        $stockOnHand = $this->stockService->getStockOnHand();
+
+        if ($stockOnHand->isEmpty()) {
+            return $this->responseNotFound(message: 'No stock on hand found.');
+        }
+
+        return $this->responseSuccess(
+            message: 'Stock on hand retrieved successfully.',
+            data: $stockOnHand
+        );
+    }
 }

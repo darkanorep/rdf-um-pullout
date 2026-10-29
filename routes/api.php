@@ -21,6 +21,12 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::resource('misc-receipts', \App\Http\Controllers\MiscellaneousReceiptController::class)
         ->parameters(['misc-receipts' => 'miscellaneousReceipt'])
         ->only(['index', 'store', 'show', 'update', 'destroy']);
+    Route::resource('move-orders', \App\Http\Controllers\MoveOrderController::class)
+//        ->parameters(['move-orders' => 'moveOrder'])
+        ->only(['index', 'store', 'show', 'update', 'destroy']);
+    Route::get('stock-on-hand', [\App\Http\Controllers\StockController::class, 'getStockOnHand']);
+    Route::resource('misc-issues', \App\Http\Controllers\MiscellaneousController::class)
+        ->only(['index','store']);
 
     Route::post('logout', [\App\Http\Controllers\AuthController::class, 'logout']);
 });
