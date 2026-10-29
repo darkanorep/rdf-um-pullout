@@ -49,7 +49,7 @@ class StockService
 
     public function findById(int $id): ?Stock
     {
-        return $this->stock->find($id);
+        return $this->stock->with(['inventories'])->find($id);
     }
 
     public function updateStock(array $data, Stock $stock): Stock
