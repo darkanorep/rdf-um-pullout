@@ -155,6 +155,7 @@ class StockService
             ->groupBy('item_id')
             ->map(fn ($records, $itemId) => [
                 'item_id' => (int) $itemId,
+                'inventory_id' => $records->first()->id,
                 'item_code' => $records->first()->item->code,
                 'item_name' => $records->first()->item->name,
                 'uom_id' => $records->first()->uom_id,
