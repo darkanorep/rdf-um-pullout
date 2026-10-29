@@ -21,6 +21,7 @@ class AuthService
 
             // Get first role name as string
             $userData['role'] = $user->roles->first()?->name ?? null;
+            $userData['warehouse'] = $user->warehouses;
             $userData['permissions'] = $permissions;
 //            $userData['charge'] = $user->charge;
             unset($userData['roles']);
