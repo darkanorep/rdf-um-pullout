@@ -26,9 +26,19 @@ class MoveOrderRequest extends FormRequest
             'date' => ['required', 'date'],
             'description' => ['required', 'string'],
             'remarks' => ['required', 'string'],
-            'move_inventory' => 'array|required',
-            'move_inventory.*.inventory_id' => 'integer|required|exists:inventories,id',
-            'move_inventory.*.quantity' => 'integer|required',
+
+            'move_inventory' => ['required', 'array', 'min:1'],
+            'move_inventory.*.item_id' => [
+                'required',
+                'integer',
+                'distinct',
+                'exists:items,id',
+            ],
+            'move_inventory.*.quantity' => [
+                'required',
+                'numeric',
+                'gt:0',
+            ],
         ];
     }
 }

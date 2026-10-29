@@ -116,25 +116,30 @@ class StockService
         ), 0)
         SQL;
 
+        $remainingStock = "inventories.actual_received - ({$movedQuantity})";
+
         $hasRemainingStock = static fn ($query) => $query->whereRaw(
-            "inventories.actual_received - ({$movedQuantity}) > 0"
+            "{$remainingStock} > 0"
         );
 
         $stocks = $this->stock->query()
             ->whereHas('inventories', $hasRemainingStock)
             ->with([
-                'inventories' => static function ($query) use ($movedQuantity) {
+                'inventories' => static function ($query) use (
+                    $movedQuantity,
+                    $remainingStock
+                ) {
                     $query->addSelect('inventories.*')
-                        ->selectRaw(
-                            "inventories.actual_received - ({$movedQuantity}) AS remaining_stock"
-                        )
-                        ->whereRaw(
-                            "inventories.actual_received - ({$movedQuantity}) > 0"
-                        );
+                        ->selectRaw("{$remainingStock} AS remaining_stock")
+                        ->whereRaw("{$remainingStock} > 0");
                 },
-                'inventories.moveInventory',
+                'inventories.moveInventories',
+                'inventories.accountTitle',
+                'inventories.item',
+                'inventories.uom',
             ])
-            ->orderBy('updated_at', 'desc')
+            ->orderByDesc('received_date')
+            ->orderByDesc('id')
             ->useFilters()
             ->dynamicPaginate();
 
@@ -153,18 +158,29 @@ class StockService
 
         return $inventoryRecords
             ->groupBy('item_id')
-            ->map(fn ($records, $itemId) => [
-                'item_id' => (int) $itemId,
-                'inventory_id' => $records->first()->id,
-                'item_code' => $records->first()->item->code,
-                'item_name' => $records->first()->item->name,
-                'uom_id' => $records->first()->uom_id,
-                'uom' => $records->first()->uom->name,
-                'remaining_stock' => $records->sum(
-                    fn ($inventory) => (float) $inventory->remaining_stock
-                ),
-                'records' => $records->values(),
-            ])
+            ->map(function ($records, $itemId) {
+                $availableRecord = $records->first(
+                    fn ($inventory) =>
+                        (float) $inventory->getRawOriginal('remaining_stock') > 0
+                );
+
+                $firstRecord = $records->first();
+
+                return [
+                    'item_id' => (int) $itemId,
+                    'inventory_id' => $availableRecord?->id,
+                    'item_code' => $firstRecord->item->code,
+                    'item_name' => $firstRecord->item->name,
+                    'uom_id' => $firstRecord->uom_id,
+                    'uom' => $firstRecord->uom->name,
+                    'remaining_stock' => $records->sum(
+                        fn ($inventory) =>
+                        (float) $inventory->getRawOriginal('remaining_stock')
+                    ),
+                    'account_title' => $availableRecord?->accountTitle,
+                    'records' => $records->values(),
+                ];
+            })
             ->values();
     }
 }

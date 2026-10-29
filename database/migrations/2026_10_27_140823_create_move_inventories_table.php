@@ -13,9 +13,9 @@ return new class extends Migration
     {
         Schema::create('move_inventories', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('move_order_id')->nullable()->constrained('move_orders');
-            $table->foreignId('inventory_id')->nullable()->constrained('inventories');
-            $table->float('quantity')->nullable();
+            $table->foreignId('move_order_id')->constrained('move_orders');
+            $table->foreignId('inventory_id')->constrained('inventories');
+            $table->decimal('quantity', 14, 3);
             $table->timestamps();
             $table->softDeletes();
         });

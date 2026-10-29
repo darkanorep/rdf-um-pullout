@@ -2,72 +2,158 @@
 
 namespace App\Services;
 
+use App\Models\Inventory;
+use App\Models\MoveInventory;
 use App\Models\MoveOrder;
-use Illuminate\Database\QueryException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class MoveOrderService
 {
-    public function __construct(private readonly MoveOrder $moveOrder) {}
+    public function __construct(
+        private readonly MoveOrder $moveOrder
+    ) {}
 
     public function getMoveOrders()
     {
         return $this->moveOrder->query()
-            ->with(['moveInventory'])
-            ->orderBy('updated_at', 'desc')->useFilters()->dynamicPaginate();
+            ->with('moveInventory')
+            ->orderByDesc('updated_at')
+            ->useFilters()
+            ->dynamicPaginate();
     }
 
     public function storeMoveOrder(array $data): MoveOrder
     {
-        for ($attempt = 1; $attempt <= 3; $attempt++) {
-            try {
-                return DB::transaction(function () use ($data) {
-                    $stock = $this->moveOrder->create(Arr::except($data, 'move_inventory'));
+        return DB::transaction(function () use ($data) {
+            $moveOrder = $this->moveOrder->create(
+                Arr::except($data, ['move_inventory'])
+            );
 
-                    $stock->moveInventory()->createMany($data['move_inventory']);
+            $this->allocateInventory($moveOrder, $data['move_inventory']);
 
-                    return $stock->load('moveInventory');
-                });
-            } catch (QueryException $exception) {
-                if ( $attempt === 3) {
-                    throw $exception;
-                }
-            }
-        }
-
-        throw new \LogicException('Unable to create move order.');
+            return $moveOrder->load('moveInventory');
+        }, 3);
     }
 
     public function findById(int $id): ?MoveOrder
     {
-        return $this->moveOrder->with(['moveInventory'])->find($id);
+        return $this->moveOrder
+            ->with('moveInventory')
+            ->find($id);
     }
 
-    public function updateMoveOrder(array $data, MoveOrder $moveOrder): MoveOrder
-    {
+    public function updateMoveOrder(
+        array $data,
+        MoveOrder $moveOrder
+    ): MoveOrder {
         return DB::transaction(function () use ($data, $moveOrder) {
-            // Serialize concurrent edits of the same stock
-            $stock = $this->moveOrder->whereKey($moveOrder->getKey())->lockForUpdate()->firstOrFail();
+            $lockedMoveOrder = $this->moveOrder
+                ->whereKey($moveOrder->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
 
-            $stock->update(Arr::except($data, 'move_inventory'));
+            $lockedMoveOrder->update(
+                Arr::except($data, ['move_inventory'])
+            );
 
-            // Only touch lines if the client sent them (supports header-only PATCH)
-            if (isset($data['move_inventory'])) {
-                $stock->moveInventory()->delete();
-                $stock->moveInventory()->createMany($data['move_inventory']);
+            if (array_key_exists('move_inventory', $data)) {
+                $lockedMoveOrder->moveInventory()->delete();
+
+                $this->allocateInventory(
+                    $lockedMoveOrder,
+                    $data['move_inventory']
+                );
             }
 
-            return $stock->load('moveInventory');
+            return $lockedMoveOrder->load('moveInventory');
+        }, 3);
+    }
+
+    public function deleteMoveOrder(int $id): void
+    {
+        DB::transaction(function () use ($id) {
+            $moveOrder = $this->moveOrder
+                ->withTrashed()
+                ->whereKey($id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $moveInventory = $moveOrder
+                ->moveInventory()
+                ->withTrashed();
+
+            if ($moveOrder->trashed()) {
+                $moveInventory->restore();
+                $moveOrder->restore();
+
+                return;
+            }
+
+            $moveInventory->delete();
+            $moveOrder->delete();
         });
     }
 
-    public function deleteMoveOrder(int $id): void {
-        $moveOrder = $this->moveOrder->withTrashed()->find($id);
-        if ($moveOrder->trashed()) {
-            $moveOrder->restore();
-        } else {
-            $moveOrder->delete();
+    /**
+     * Allocate requested item quantities across batches,
+     * newest received batch first.
+     *
+     * @param array<int, array{item_id: int, quantity: int|float|string}> $lines
+     */
+    private function allocateInventory(
+        MoveOrder $moveOrder,
+        array $lines
+    ): void {
+        foreach ($lines as $index => $line) {
+            $quantityLeft = round((float) $line['quantity'], 3);
+
+            $inventories = Inventory::query()
+                ->join('stocks', 'stocks.id', '=', 'inventories.stock_id')
+                ->where('inventories.item_id', $line['item_id'])
+                ->whereNull('stocks.deleted_at')
+                ->orderByDesc('stocks.received_date')
+                ->orderByDesc('inventories.id')
+                ->select('inventories.*')
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($inventories as $inventory) {
+                $alreadyMoved = (float) MoveInventory::query()
+                    ->where('inventory_id', $inventory->id)
+                    ->whereNull('deleted_at')
+                    ->sum('quantity');
+
+                $available = round(
+                    (float) $inventory->actual_received - $alreadyMoved,
+                    3
+                );
+
+                if ($available <= 0) {
+                    continue;
+                }
+
+                $allocated = round(min($available, $quantityLeft), 3);
+
+                $moveOrder->moveInventory()->create([
+                    'inventory_id' => $inventory->id,
+                    'quantity' => $allocated,
+                ]);
+
+                $quantityLeft = round($quantityLeft - $allocated, 3);
+
+                if ($quantityLeft <= 0) {
+                    break;
+                }
+            }
+
+            if ($quantityLeft > 0) {
+                throw ValidationException::withMessages([
+                    "move_inventory.{$index}.quantity" =>
+                        'The requested quantity exceeds the available stock for this item.',
+                ]);
+            }
         }
     }
 }
