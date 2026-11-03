@@ -26,7 +26,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
         ->only(['index', 'store', 'show', 'update', 'destroy']);
     Route::get('stock-on-hand', [\App\Http\Controllers\StockController::class, 'getStockOnHand']);
     Route::resource('misc-issues', \App\Http\Controllers\MiscellaneousController::class)
-        ->only(['index','store']);
+        ->only(['index', 'store', 'show', 'update', 'destroy']);
 
     Route::post('logout', [\App\Http\Controllers\AuthController::class, 'logout']);
 });

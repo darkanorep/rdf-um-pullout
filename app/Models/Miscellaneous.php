@@ -20,6 +20,6 @@ class Miscellaneous extends Model
 
     public function miscellaneousIssue(): HasMany
     {
-        return $this->hasMany(MiscellaneousIssue::class);
+        return $this->hasMany(MiscellaneousIssue::class, 'miscellaneous_id', 'id');
     }
 }

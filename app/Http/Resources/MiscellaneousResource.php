@@ -19,6 +19,7 @@ class MiscellaneousResource extends JsonResource
             'date' => $this->date,
             'transaction_type' => $this->transaction_type,
             'remarks' => $this->remarks,
+            'miscellaneous_issues' => MiscellaneousIssueResource::collection($this->whenLoaded('miscellaneousIssue')),
         ];
     }
 }

@@ -172,6 +172,7 @@ class StockService
                     'item_code' => $firstRecord->item->code,
                     'item_name' => $firstRecord->item->name,
                     'uom_id' => $firstRecord->uom_id,
+                    'uom_symbol' => $firstRecord->uom->symbol,
                     'uom' => $firstRecord->uom->name,
                     'remaining_stock' => $records->sum(
                         fn ($inventory) =>
