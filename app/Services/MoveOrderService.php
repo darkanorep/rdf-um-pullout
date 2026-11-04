@@ -19,6 +19,7 @@ class MoveOrderService
     {
         return $this->moveOrder->query()
             ->with('moveInventory')
+            ->where('user_id', auth()->id())
             ->orderByDesc('updated_at')
             ->useFilters()
             ->dynamicPaginate();
@@ -28,7 +29,10 @@ class MoveOrderService
     {
         return DB::transaction(function () use ($data) {
             $moveOrder = $this->moveOrder->create(
-                Arr::except($data, ['move_inventory'])
+                array_merge(
+                    Arr::except($data, ['move_inventory']),
+                    ['user_id' => auth()->id()]
+                )
             );
 
             $this->allocateInventory($moveOrder, $data['move_inventory']);
@@ -55,7 +59,10 @@ class MoveOrderService
                 ->firstOrFail();
 
             $lockedMoveOrder->update(
-                Arr::except($data, ['move_inventory'])
+                array_merge(
+                    Arr::except($data, ['move_inventory']),
+                    ['user_id' => auth()->id()]
+                )
             );
 
             if (array_key_exists('move_inventory', $data)) {

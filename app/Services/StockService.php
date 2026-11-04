@@ -17,6 +17,7 @@ class StockService
     {
         return $this->stock->query()
             ->with(['inventories'])
+            ->where('user_id', auth()->id())
             ->orderBy('updated_at', 'desc')->useFilters()->dynamicPaginate();
     }
 
@@ -25,7 +26,12 @@ class StockService
         for ($attempt = 1; $attempt <= 3; $attempt++) {
             try {
                 return DB::transaction(function () use ($data) {
-                    $stock = $this->stock->create(Arr::except($data, 'inventory'));
+                    $stock = $this->stock->create(
+                        array_merge(
+                            Arr::except($data, 'inventory'),
+                            ['user_id' => auth()->id()]
+                        )
+                    );
 
                     $stock->inventories()->createMany($data['inventory']);
 
@@ -71,7 +77,7 @@ class StockService
 
     private function syncInventories(Stock $stock, array $lines): void
     {
-        // Scoped to THIS stock, so a client can't hijack another stock's line by passing its id
+        // Scoped to THIS stock, so a client can't hijack another stock's line by passing its ID
         $existing = $stock->inventories()->get()->keyBy('id');
         $keepIds = [];
 
@@ -79,6 +85,8 @@ class StockService
             $id = $line['id'] ?? null;
 
             if ($id === null) {
+                $line['user_id'] = auth()->id();
+
                 $keepIds[] = $stock->inventories()->create($line)->id;
 
                 continue;
@@ -123,6 +131,7 @@ class StockService
         );
 
         $stocks = $this->stock->query()
+            ->where('user_id', auth()->id())
             ->whereHas('inventories', $hasRemainingStock)
             ->with([
                 'inventories' => static function ($query) use (

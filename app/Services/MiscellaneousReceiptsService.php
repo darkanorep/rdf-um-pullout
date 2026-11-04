@@ -20,6 +20,7 @@ class MiscellaneousReceiptsService
     {
         return $this->miscellaneousReceipt->query()
             ->with(['miscellaneousInventory'])
+            ->where('user_id', auth()->id())
             ->orderBy('updated_at', 'desc')->useFilters()->dynamicPaginate();
     }
 
@@ -28,14 +29,21 @@ class MiscellaneousReceiptsService
         for ($attempt = 1; $attempt <= 3; $attempt++) {
             try {
                 return DB::transaction(function () use ($data) {
-                    $stock = $this->miscellaneousReceipt->create(Arr::except($data, 'miscellaneous_inventory'));
+                    $stock = $this->miscellaneousReceipt->create(
+                        array_merge(
+                            Arr::except($data, 'miscellaneous_inventory'),
+                            ['user_id' => auth()->id()]
+                        )
+                    );
 
-                    $stock->miscellaneousInventory()->createMany($data['miscellaneous_inventory']);
+                    $stock->miscellaneousInventory()->createMany(
+                        $data['miscellaneous_inventory']
+                    );
 
                     return $stock->load('miscellaneousInventory');
                 });
             } catch (QueryException $exception) {
-                if ( $attempt === 3) {
+                if ($attempt === 3) {
                     throw $exception;
                 }
             }
@@ -49,47 +57,72 @@ class MiscellaneousReceiptsService
         return $this->miscellaneousReceipt->with(['miscellaneousInventory'])->find($id);
     }
 
-    public function updateMiscellaneousReceipt(array $data, MiscellaneousReceipt $miscellaneousReceipt): MiscellaneousReceipt
-    {
+    public function updateMiscellaneousReceipt(
+        array $data,
+        MiscellaneousReceipt $miscellaneousReceipt
+    ): MiscellaneousReceipt {
         return DB::transaction(function () use ($data, $miscellaneousReceipt) {
             // Serialize concurrent edits of the same stock
-            $stock = $this->miscellaneousReceipt->whereKey($miscellaneousReceipt->getKey())->lockForUpdate()->firstOrFail();
+            $stock = $this->miscellaneousReceipt
+                ->whereKey($miscellaneousReceipt->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
 
-            $stock->update(Arr::except($data, 'miscellaneous_inventory'));
+            $stock->update(
+                array_merge(
+                    Arr::except($data, 'miscellaneous_inventory'),
+                    ['user_id' => auth()->id()]
+                )
+            );
 
-            // Only touch lines if the client sent them (supports header-only PATCH)
+            // Only touch lines if the client sent them
             if (array_key_exists('miscellaneous_inventory', $data)) {
-                $this->syncInventories($miscellaneousReceipt, $data['miscellaneous_inventory']);
+                $this->syncInventories(
+                    $stock,
+                    $data['miscellaneous_inventory']
+                );
             }
 
-            return $miscellaneousReceipt->load('miscellaneousInventory');
+            return $stock->load('miscellaneousInventory');
         });
     }
 
-    private function syncInventories(MiscellaneousReceipt $stock, array $lines): void
-    {
-        // Scoped to THIS stock, so a client can't hijack another stock's line by passing its id
-        $existing = $stock->miscellaneousInventory()->get()->keyBy('id');
+    private function syncInventories(
+        MiscellaneousReceipt $stock,
+        array $lines
+    ): void {
+        // Scoped to THIS stock
+        $existing = $stock->miscellaneousInventory()
+            ->get()
+            ->keyBy('id');
+
         $keepIds = [];
 
         foreach ($lines as $line) {
             $id = $line['id'] ?? null;
 
             if ($id === null) {
-                $keepIds[] = $stock->miscellaneousInventory()->create($line)->id;
+                $line['user_id'] = auth()->id();
+
+                $keepIds[] = $stock->miscellaneousInventory()
+                    ->create($line)->id;
 
                 continue;
             }
 
             $inventory = $existing->get($id)
-                ?? throw (new ModelNotFoundException)->setModel(MiscellaneousInventory::class, [$id]);
+                ?? throw (new ModelNotFoundException)
+                    ->setModel(MiscellaneousInventory::class, [$id]);
 
             $inventory->update(Arr::except($line, 'id'));
+
             $keepIds[] = $inventory->id;
         }
 
         // Soft-delete lines the client removed
-        $stock->miscellaneousInventory()->whereNotIn('id', $keepIds)->delete();
+        $stock->miscellaneousInventory()
+            ->whereNotIn('id', $keepIds)
+            ->delete();
     }
 
     public function deleteMiscellaneousReceipt(int $id): void
