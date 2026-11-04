@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Inventory;
 use App\Models\Miscellaneous;
 use App\Models\MiscellaneousInventory;
 use App\Models\MiscellaneousIssue;
@@ -10,6 +11,7 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class MiscellaneousService
 {
@@ -31,18 +33,43 @@ class MiscellaneousService
         for ($attempt = 1; $attempt <= 3; $attempt++) {
             try {
                 return DB::transaction(function () use ($data) {
-                    $stock = $this->miscellaneous->create(
+                    $userId = auth()->id();
+
+                    $miscellaneous = $this->miscellaneous->create(
                         array_merge(
                             Arr::except($data, 'miscellaneous_issue'),
-                            ['user_id' => auth()->id()]
+                            ['user_id' => $userId]
                         )
                     );
 
-                    $stock->miscellaneousIssue()->createMany(
+                    foreach ($data['miscellaneous_issue'] as $line) {
+                        $quantity = $line['quantity'];
+
+                        $inventory = Inventory::query()
+                            ->whereKey($line['inventory_id'])
+                            ->whereHas('stock', fn ($query) => $query->where('user_id', $userId))
+                            ->lockForUpdate()
+                            ->firstOrFail();
+
+                        // The balance condition prevents the quantity from going below zero.
+                        $updated = Inventory::query()
+                            ->whereKey($inventory->getKey())
+                            ->where('quantity_on_hand', '>=', $quantity)
+                            ->decrement('quantity_on_hand', $quantity);
+
+                        if ($updated !== 1) {
+                            throw ValidationException::withMessages([
+                                'miscellaneous_issue' =>
+                                    "Insufficient quantity for inventory {$inventory->getKey()}.",
+                            ]);
+                        }
+                    }
+
+                    $miscellaneous->miscellaneousIssue()->createMany(
                         $data['miscellaneous_issue']
                     );
 
-                    return $stock->load('miscellaneousIssue');
+                    return $miscellaneous->load('miscellaneousIssue');
                 });
             } catch (QueryException $exception) {
                 if ($attempt === 3) {

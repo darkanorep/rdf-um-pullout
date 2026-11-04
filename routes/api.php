@@ -5,6 +5,11 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('login', [\App\Http\Controllers\AuthController::class, 'login']);
 Route::group(['middleware' => ['auth:sanctum']], function () {
+
+    Route::prefix('truncate')->group(function () {
+        Route::post('stocks', [\App\Http\Controllers\StockController::class, 'truncate']);
+    });
+
     Route::resource('users', \App\Http\Controllers\UserController::class)->only(['index', 'store', 'show', 'update', 'destroy']);
     Route::resource('roles', \App\Http\Controllers\RoleController::class)->only(['index', 'store', 'show', 'update', 'destroy']);
     Route::resource('items', \App\Http\Controllers\ItemController::class)->only(['index', 'store', 'show', 'update', 'destroy']);
@@ -27,6 +32,18 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::get('stock-on-hand', [\App\Http\Controllers\StockController::class, 'getStockOnHand']);
     Route::resource('misc-issues', \App\Http\Controllers\MiscellaneousController::class)
         ->only(['index', 'store', 'show', 'update', 'destroy']);
+
+    Route::prefix('transfers')->controller(
+        \App\Http\Controllers\TransferController::class
+    )->group(function () {
+        Route::get('/', 'index');
+        Route::post('/', 'store');
+        Route::get('/{id}', 'show')->whereNumber('id');
+        Route::post('/{bondedWarehouse}/accept', 'accept')
+            ->whereNumber('bondedWarehouse');
+        Route::post('/{bondedWarehouse}/reject', 'reject')
+            ->whereNumber('bondedWarehouse');
+    });
 
     Route::post('logout', [\App\Http\Controllers\AuthController::class, 'logout']);
 });

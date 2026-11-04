@@ -83,4 +83,13 @@ class StockController extends Controller
             data: $stockOnHand
         );
     }
+
+    public function truncate()
+    {
+        $this->stockService->truncateStocks();
+
+        return $this->responseAccepted(
+            message: 'Stocks truncated successfully.'
+        );
+    }
 }

@@ -2,12 +2,14 @@
 
 namespace App\Services;
 
+use App\Models\Inventory;
 use App\Models\MiscellaneousInventory;
 use App\Models\MiscellaneousReceipt;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class MiscellaneousReceiptsService
 {
@@ -29,18 +31,42 @@ class MiscellaneousReceiptsService
         for ($attempt = 1; $attempt <= 3; $attempt++) {
             try {
                 return DB::transaction(function () use ($data) {
-                    $stock = $this->miscellaneousReceipt->create(
+                    $userId = auth()->id();
+
+                    $receipt = $this->miscellaneousReceipt->create(
                         array_merge(
                             Arr::except($data, 'miscellaneous_inventory'),
-                            ['user_id' => auth()->id()]
+                            ['user_id' => $userId]
                         )
                     );
 
-                    $stock->miscellaneousInventory()->createMany(
-                        $data['miscellaneous_inventory']
-                    );
+                    $lines = $data['miscellaneous_inventory'];
 
-                    return $stock->load('miscellaneousInventory');
+                    $receipt->miscellaneousInventory()->createMany($lines);
+
+                    foreach ($lines as $line) {
+                        // Use the quantity key your request actually sends.
+                        $quantity = $line['quantity'];
+
+                        $inventory = Inventory::query()
+                            ->where('item_id', $line['item_id'])
+                            ->where('uom_id', $line['uom_id'])
+                            ->where('account_title_id', $line['account_title_id'])
+                            ->whereHas('stock', fn ($query) => $query->where('user_id', $userId))
+                            ->lockForUpdate()
+                            ->first();
+
+                        if (! $inventory) {
+                            throw ValidationException::withMessages([
+                                'miscellaneous_inventory' =>
+                                    "No existing inventory row found for item {$line['item_id']}.",
+                            ]);
+                        }
+
+                        $inventory->increment('quantity_on_hand', $quantity);
+                    }
+
+                    return $receipt->load('miscellaneousInventory');
                 });
             } catch (QueryException $exception) {
                 if ($attempt === 3) {

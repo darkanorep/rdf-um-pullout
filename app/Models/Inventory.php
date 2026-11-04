@@ -36,4 +36,8 @@ class Inventory extends Model
     {
         return $this->hasMany(MoveInventory::class, 'inventory_id');
     }
+
+    public function bondedItems() {
+        return $this->hasMany(BondedItem::class);
+    }
 }

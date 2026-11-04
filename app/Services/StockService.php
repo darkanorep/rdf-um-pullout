@@ -33,7 +33,13 @@ class StockService
                         )
                     );
 
-                    $stock->inventories()->createMany($data['inventory']);
+                    $inventoryRows = array_map(static function (array $item): array {
+                        $item['quantity_on_hand'] = $item['actual_received'] ?? 0;
+
+                        return $item;
+                    }, $data['inventory']);
+
+                    $stock->inventories()->createMany($inventoryRows);
 
                     return $stock->load('inventories');
                 });
@@ -124,7 +130,7 @@ class StockService
         ), 0)
         SQL;
 
-        $remainingStock = "inventories.actual_received - ({$movedQuantity})";
+        $remainingStock = "inventories.quantity_on_hand - ({$movedQuantity})";
 
         $hasRemainingStock = static fn ($query) => $query->whereRaw(
             "{$remainingStock} > 0"
@@ -192,5 +198,23 @@ class StockService
                 ];
             })
             ->values();
+    }
+
+    public function truncateStocks(): void
+    {
+        DB::statement('SET FOREIGN_KEY_CHECKS=0');
+        DB::table('bonded_items')->truncate();
+        DB::table('bonded_warehouses')->truncate();
+        DB::table('inventories')->truncate();
+        DB::table('miscellaneous')->truncate();
+        DB::table('miscellaneous_inventories')->truncate();
+        DB::table('miscellaneous_issues')->truncate();
+        DB::table('miscellaneous_receipts')->truncate();
+        DB::table('move_inventories')->truncate();
+        DB::table('move_orders')->truncate();
+        DB::table('stocks')->truncate();
+        DB::table('transfer_items')->truncate();
+        DB::table('transfers')->truncate();
+        DB::statement('SET FOREIGN_KEY_CHECKS=1');
     }
 }

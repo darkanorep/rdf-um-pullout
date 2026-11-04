@@ -31,6 +31,10 @@ class Stock extends Model
         });
     }
 
+    public function user() {
+        return $this->belongsTo(User::class);
+    }
+
     public function inventories(): HasMany
     {
         return $this->hasMany(Inventory::class);

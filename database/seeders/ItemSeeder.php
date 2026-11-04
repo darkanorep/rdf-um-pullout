@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 
 class ItemSeeder extends Seeder
 {
-    private const ITEM_COUNT = 10_000;
+    private const ITEM_COUNT = 100;
     private const CHUNK_SIZE = 500;
 
     public function run(): void
