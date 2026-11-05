@@ -6,6 +6,7 @@ use App\Http\Requests\UserRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Services\UserService;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class UserController extends Controller
 {
@@ -29,8 +30,9 @@ class UserController extends Controller
             return $this->responseNotFound(message: 'No users found.');
         }
 
-        $users->through(fn ($user) => UserResource::make($user)->resolve());
-        return response()->json($users);
+        return $users instanceof LengthAwarePaginator
+            ? $users->through(fn($item) => new UserResource($item))
+            : $this->responseSuccess('Users retrieved successfully.', UserResource::collection($users));
     }
 
 

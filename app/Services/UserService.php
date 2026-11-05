@@ -14,7 +14,7 @@ class UserService
      */
     public function __construct(private readonly User $user) {}
 
-    public function getAllUsers() : LengthAwarePaginator
+    public function getAllUsers()
     {
         return $this->user->query()->with([
             'roles', 'warehouses'
