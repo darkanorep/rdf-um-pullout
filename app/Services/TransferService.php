@@ -139,7 +139,10 @@ class TransferService
             ->with([
                 'sender:id,first_name,last_name',
                 'recipient:id,first_name,last_name',
-                'items.inventory:id,stock_id,item_id,uom_id,account_title_id',
+                'items.inventory:id,item_id,uom_id,account_title_id,quantity_on_hand',
+                'items.inventory.item:id,code,name',
+                'items.inventory.uom:id,name,symbol',
+                'items.inventory.accountTitle:id,name',
                 'transfer.items.bondedItem',
                 'transfer.items.originInventory',
                 'transfer.items.receivedInventory',

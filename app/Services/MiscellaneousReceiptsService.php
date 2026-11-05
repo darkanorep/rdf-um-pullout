@@ -51,7 +51,7 @@ class MiscellaneousReceiptsService
                         $inventory = Inventory::query()
                             ->where('item_id', $line['item_id'])
                             ->where('uom_id', $line['uom_id'])
-                            ->where('account_title_id', $line['account_title_id'])
+//                            ->where('account_title_id', $line['account_title_id'])
                             ->whereHas('stock', fn ($query) => $query->where('user_id', $userId))
                             ->lockForUpdate()
                             ->first();
