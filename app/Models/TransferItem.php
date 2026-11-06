@@ -14,8 +14,10 @@ class TransferItem extends Model
     public function bondedItem() {
         return $this->belongsTo(BondedItem::class);
     }
-    public function originInventory() {
-        return $this->belongsTo(Inventory::class, 'origin_inventory_id');
+    public function originInventory()
+    {
+        return $this->belongsTo(Inventory::class, 'origin_inventory_id')
+            ->withTrashed();
     }
     public function receivedInventory() {
         return $this->belongsTo(Inventory::class, 'received_inventory_id');

@@ -81,32 +81,52 @@ class TransferService
                 'status' => 'pending',
             ]);
 
+            $processedItemIds = [];
+
             foreach ($items as $line) {
-                // Lock the inventory row before checking and changing its balance.
-                $inventory = Inventory::query()
+                $selectedInventory = Inventory::query()
                     ->whereKey($line['inventory_id'])
                     ->lockForUpdate()
                     ->firstOrFail();
 
-                // Lock/check its owning stock separately so an inventory row cannot
-                // be used by a user who does not own that stock.
                 $stock = Stock::query()
-                    ->whereKey($inventory->stock_id)
+                    ->whereKey($selectedInventory->stock_id)
                     ->lockForUpdate()
                     ->firstOrFail();
 
                 if ((int) $stock->user_id !== (int) $sender->getKey()) {
-                    throw new AuthorizationException('You do not own inventory '.$inventory->getKey().'.');
+                    throw new AuthorizationException(
+                        'You do not own inventory '.$selectedInventory->getKey().'.'
+                    );
                 }
 
-                if ($inventory->quantity_on_hand === null) {
+                $itemId = (int) $selectedInventory->item_id;
+
+                if (in_array($itemId, $processedItemIds, true)) {
                     throw ValidationException::withMessages([
-                        'items' => "Inventory {$inventory->getKey()} has no initialized on-hand balance.",
+                        'items' => "Item {$itemId} can only appear once in a transfer request.",
                     ]);
                 }
 
+                $processedItemIds[] = $itemId;
+
+                $inventoryRows = Inventory::query()
+                    ->where('item_id', $itemId)
+                    ->whereHas('stock', fn ($query) =>
+                    $query->where('user_id', $sender->getKey())
+                    )
+                    ->withSum(
+                        [
+                            'moveInventories as moved_quantity' => fn ($query) =>
+                            $query->whereNull('move_inventories.deleted_at'),
+                        ],
+                        'quantity'
+                    )
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get();
+
                 $requested = $this->toMilli((string) $line['quantity']);
-                $available = $this->toMilli((string) $inventory->quantity_on_hand);
 
                 if ($requested <= 0) {
                     throw ValidationException::withMessages([
@@ -114,19 +134,55 @@ class TransferService
                     ]);
                 }
 
-                if ($requested > $available) {
+                $availableByInventory = [];
+                $totalAvailable = 0;
+
+                foreach ($inventoryRows as $row) {
+                    if ($row->quantity_on_hand === null) {
+                        throw ValidationException::withMessages([
+                            'items' => "Inventory {$row->getKey()} has no initialized on-hand balance.",
+                        ]);
+                    }
+
+                    $onHand = $this->toMilli((string) $row->quantity_on_hand);
+                    $moved = $this->toMilli((string) ($row->moved_quantity ?? '0'));
+                    $remaining = max(0, $onHand - $moved);
+
+                    $availableByInventory[$row->getKey()] = $remaining;
+                    $totalAvailable += $remaining;
+                }
+
+                if ($requested > $totalAvailable) {
                     throw ValidationException::withMessages([
-                        'items' => "Insufficient available quantity for inventory {$inventory->getKey()}.",
+                        'items' => "Insufficient available quantity for item {$itemId}.",
                     ]);
                 }
 
-                $inventory->quantity_on_hand = $this->fromMilli($available - $requested);
-                $inventory->save();
+                $remainingToTransfer = $requested;
 
-                $transferRequest->items()->create([
-                    'inventory_id' => $inventory->getKey(),
-                    'quantity' => $this->fromMilli($requested),
-                ]);
+                foreach ($inventoryRows as $row) {
+                    if ($remainingToTransfer <= 0) {
+                        break;
+                    }
+
+                    $rowAvailable = $availableByInventory[$row->getKey()];
+                    $deduct = min($rowAvailable, $remainingToTransfer);
+
+                    if ($deduct <= 0) {
+                        continue;
+                    }
+
+                    $onHand = $this->toMilli((string) $row->quantity_on_hand);
+                    $row->quantity_on_hand = $this->fromMilli($onHand - $deduct);
+                    $row->save();
+
+                    $transferRequest->items()->create([
+                        'inventory_id' => $row->getKey(),
+                        'quantity' => $this->fromMilli($deduct),
+                    ]);
+
+                    $remainingToTransfer -= $deduct;
+                }
             }
 
             return $transferRequest->load('items.inventory');
@@ -135,7 +191,7 @@ class TransferService
 
     public function showById(int $id, User $user): BondedWarehouse
     {
-        return BondedWarehouse::query()
+        $request = BondedWarehouse::query()
             ->with([
                 'sender:id,first_name,last_name',
                 'recipient:id,first_name,last_name',
@@ -153,10 +209,46 @@ class TransferService
                     ->orWhere('transferred_to', $user->getKey());
             })
             ->firstOrFail();
+
+        $groupedItems = $request->items
+            ->groupBy(function (BondedItem $bondedItem): string {
+                $inventory = $bondedItem->inventory;
+
+                return json_encode([
+                    $inventory?->item_id,
+                    $inventory?->uom_id,
+                    $inventory?->account_title_id,
+                ], JSON_THROW_ON_ERROR);
+            })
+            ->map(function ($rows): BondedItem {
+                $first = $rows->first();
+
+                $totalMilli = $rows->sum(
+                    fn (BondedItem $row): int => $this->toMilli(
+                        (string) $row->getRawOriginal('quantity')
+                    )
+                );
+
+                // Response-only aggregate; does not modify the stored row.
+                $first->setAttribute('quantity', $this->fromMilli($totalMilli));
+                $first->setAttribute(
+                    'source_inventory_ids',
+                    $rows->pluck('inventory_id')->unique()->values()->all()
+                );
+
+                return $first;
+            })
+            ->values();
+
+        $request->setRelation('items', $groupedItems);
+
+        return $request;
     }
 
-    public function accept(BondedWarehouse $routeRequest, User $recipient): Transfer
-    {
+    public function accept(
+        BondedWarehouse $routeRequest,
+        User $recipient
+    ): Transfer {
         return DB::transaction(function () use ($routeRequest, $recipient): Transfer {
             $transferRequest = BondedWarehouse::query()
                 ->whereKey($routeRequest->getKey())
@@ -178,11 +270,15 @@ class TransferService
 
             $sender = User::query()->findOrFail($transferRequest->transferred_by);
 
+            $senderName = trim("{$sender->first_name} {$sender->last_name}");
+            $recipientName = trim("{$recipient->first_name} {$recipient->last_name}");
+
             $receivedStock = Stock::query()->create([
                 'user_id' => $recipient->getKey(),
                 'received_date' => now()->toDateString(),
                 'supplier_name' => 'Internal transfer',
-                'remarks' => "Received from user {$sender->getKey()} (request {$transferRequest->getKey()}).",
+                'remarks' => "Transferred from {$senderName}"
+                    ." to {$recipientName}"
             ]);
 
             $transfer = Transfer::query()->create([
