@@ -2,16 +2,22 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\StockHistoryExport;
 use App\Http\Requests\StockRequest;
 use App\Http\Resources\StockResource;
 use App\Models\Stock;
+use App\Services\StockHistorySummaryService;
 use App\Services\StockService;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Maatwebsite\Excel\Facades\Excel;
 
 class StockController extends Controller
 {
-    public function __construct(private readonly StockService $stockService) {}
+    public function __construct(
+        private readonly StockService $stockService,
+        private readonly StockHistorySummaryService $stockHistorySummaryService
+    ) {}
 
     public function index() {
         $stocks = $this->stockService->getStock();
@@ -81,6 +87,20 @@ class StockController extends Controller
         return $this->responseSuccess(
             message: 'Stock on hand retrieved successfully.',
             data: $stockOnHand
+        );
+    }
+
+    public function stockOnHandSummary(Request $request)
+    {
+        return $this->stockHistorySummaryService
+            ->getStockOnHandSummary($request->boolean('include_history'));
+    }
+
+    public function exportStockHistory(Request $request)
+    {
+        return Excel::download(
+            new StockHistoryExport((int) $request->user()->id),
+            'stock-history.xlsx'
         );
     }
 
