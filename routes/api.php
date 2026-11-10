@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\StockController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -30,6 +31,8 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
 //        ->parameters(['move-orders' => 'moveOrder'])
         ->only(['index', 'store', 'show', 'update', 'destroy']);
     Route::get('stock-on-hand', [\App\Http\Controllers\StockController::class, 'getStockOnHand']);
+    Route::get('stock-on-hand-summary', [StockController::class, 'stockOnHandSummary']);
+    Route::get('/stock-on-hand-summary/export', [StockController::class, 'exportStockHistory']);
     Route::resource('misc-issues', \App\Http\Controllers\MiscellaneousController::class)
         ->only(['index', 'store', 'show', 'update', 'destroy']);
 
