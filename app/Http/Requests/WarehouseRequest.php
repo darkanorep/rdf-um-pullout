@@ -25,6 +25,7 @@ class WarehouseRequest extends FormRequest
         return [
             'code' => 'required|string|unique:warehouses,code,' .  $this->warehouse?->id,
             'name' => 'required|string|unique:warehouses,name,' .  $this->warehouse?->id,
+            'type' => 'required|string',
         ];
     }
 }
