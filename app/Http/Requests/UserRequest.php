@@ -32,6 +32,7 @@ class UserRequest extends FormRequest
             'username' => 'required|string|unique:users,username,' . $this->user?->id,
             'role_id' => 'required|exists:roles,id',
             'warehouse_id' => 'sometimes|nullable|exists:warehouses,id',
+            'charge_id' => 'required|exists:charges,id',
         ];
     }
 }
