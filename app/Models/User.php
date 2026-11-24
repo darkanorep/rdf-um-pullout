@@ -42,4 +42,9 @@ class User extends Authenticatable
     {
         return $this->belongsTo(Warehouse::class, 'warehouse_id');
     }
+
+    public function charges(): BelongsTo
+    {
+        return $this->belongsTo(Charge::class, 'charge_id');
+    }
 }

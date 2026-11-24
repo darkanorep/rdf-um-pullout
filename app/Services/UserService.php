@@ -17,7 +17,7 @@ class UserService
     public function getAllUsers()
     {
         return $this->user->query()->with([
-            'roles', 'warehouses'
+            'roles', 'warehouses', 'charges'
         ])->orderBy('updated_at', 'desc')->useFilters()->dynamicPaginate();
     }
 
@@ -29,7 +29,9 @@ class UserService
 
     public function findById(int $id): ?User
     {
-        return $this->user->find($id);
+        return $this->user->with([
+            'roles', 'warehouses', 'charges'
+        ])->find($id);
     }
 
     public function updateUser(array $data, User $user): User {
