@@ -21,4 +21,10 @@ class UserFilters extends BaseFilters
         'last_name',
         'username',
     ];
+
+    protected array $relationSearch = [
+        'warehouses' => [
+            'name' , 'type', 'code'
+        ]
+    ];
 }

@@ -200,6 +200,114 @@ class StockService
             ->values();
     }
 
+    /** Return positive on-hand inventory grouped by item for one warehouse. */
+    public function getStockOnHandByWarehouse(?int $warehouseId = null): array
+    {
+        $user = auth()->user();
+
+        abort_unless($user, 401, 'Authentication is required.');
+
+        // If the caller omits warehouse_id, use the authenticated user's warehouse.
+        $warehouseId ??= $user->warehouse_id;
+        abort_unless($warehouseId, 422, 'A warehouse_id is required.');
+
+        $warehouse = DB::table('warehouses')
+            ->select(['id', 'code', 'name'])
+            ->where('id', $warehouseId)
+            ->first();
+
+        abort_unless($warehouse, 404, 'Warehouse not found.');
+
+        $movedQuantity = <<<'SQL'
+            COALESCE((
+                SELECT SUM(mi.quantity)
+                FROM move_inventories AS mi
+                WHERE mi.inventory_id = inventories.id
+                  AND mi.deleted_at IS NULL
+            ), 0)
+            SQL;
+
+        $remainingStock = "inventories.quantity_on_hand - ({$movedQuantity})";
+
+        $hasRemainingStock = static fn ($query) => $query->whereRaw(
+            "{$remainingStock} > 0"
+        );
+
+        $usersInWarehouse = DB::table('users')
+            ->select('id')
+            ->where('warehouse_id', $warehouseId);
+
+        $stocks = $this->stock->query()
+            ->whereIn('user_id', $usersInWarehouse)
+            ->whereHas('inventories', $hasRemainingStock)
+            ->with([
+                'inventories' => static function ($query) use (
+                    $movedQuantity,
+                    $remainingStock
+                ) {
+                    $query->addSelect('inventories.*')
+                        ->selectRaw("{$remainingStock} AS remaining_stock")
+                        ->whereRaw("{$remainingStock} > 0");
+                },
+                'inventories.moveInventories',
+                'inventories.accountTitle',
+                'inventories.item',
+                'inventories.uom',
+            ])
+            ->orderByDesc('received_date')
+            ->orderByDesc('id')
+            ->useFilters()
+            ->dynamicPaginate();
+
+        $inventoryRecords = $stocks->flatMap(function ($stock) {
+            return $stock->inventories->map(function ($inventory) use ($stock) {
+                $inventory->setAttribute('source_stock', [
+                    'id' => $stock->id,
+                    'batch_no' => $stock->batch_no,
+                    'received_date' => $stock->received_date,
+                    'supplier_name' => $stock->supplier_name,
+                ]);
+
+                return $inventory;
+            });
+        });
+
+        $items = $inventoryRecords
+            ->groupBy('item_id')
+            ->map(function ($records, $itemId) {
+                $availableRecord = $records->first(
+                    fn ($inventory) =>
+                        (float) $inventory->getRawOriginal('remaining_stock') > 0
+                );
+
+                $firstRecord = $records->first();
+
+                return [
+                    'item_id' => (int) $itemId,
+                    'inventory_id' => $availableRecord?->id,
+                    'item_code' => $firstRecord->item->code,
+                    'item_name' => $firstRecord->item->name,
+                    'uom_id' => $firstRecord->uom_id,
+                    'uom_symbol' => $firstRecord->uom->symbol,
+                    'uom' => $firstRecord->uom->name,
+                    'remaining_stock' => $records->sum(
+                        fn ($inventory) =>
+                        (float) $inventory->getRawOriginal('remaining_stock')
+                    ),
+                    'account_title' => $availableRecord?->accountTitle,
+                    'records' => $records->values(),
+                ];
+            })
+            ->values();
+
+        return [
+            'warehouse_id' => (int) $warehouse->id,
+            'warehouse_code' => $warehouse->code,
+            'warehouse_name' => $warehouse->name,
+            'items' => $items,
+        ];
+    }
+
     public function truncateStocks(): void
     {
         DB::statement('SET FOREIGN_KEY_CHECKS=0');

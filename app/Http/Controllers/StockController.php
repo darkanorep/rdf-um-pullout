@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Exports\StockHistoryExport;
+use App\Exports\StockWarehouseHistoryExport;
 use App\Http\Requests\StockRequest;
 use App\Http\Resources\StockResource;
 use App\Models\Stock;
@@ -90,10 +91,66 @@ class StockController extends Controller
         );
     }
 
+    public function getWarehouseStockOnHand(Request $request)
+    {
+        $validated = $request->validate([
+            'warehouse_id' => ['required', 'integer', 'exists:warehouses,id'],
+        ]);
+
+        $stockOnHand = $this->stockService->getStockOnHandByWarehouse(
+            (int) $validated['warehouse_id']
+        );
+
+        if ($stockOnHand['items']->isEmpty()) {
+            return $this->responseNotFound(
+                message: 'No stock on hand found for the specified warehouse.'
+            );
+        }
+
+        return $this->responseSuccess(
+            message: 'Stock on hand for the specified warehouse retrieved successfully.',
+            data: $stockOnHand
+        );
+    }
+
+    public function stockOnHandWarehouseSummary(Request $request)
+    {
+        $validated = $request->validate([
+            'warehouse_id' => ['sometimes', 'integer', 'exists:warehouses,id'],
+        ]);
+
+        $summary = $this->stockHistorySummaryService
+            ->getStockOnHandSummaryForAllWarehouses(
+                data_get($validated, 'warehouse_id')
+            );
+
+        if ($summary->isEmpty()) {
+            return $this->responseNotFound(
+                message: 'No warehouse stock summary found.'
+            );
+        }
+
+        return $this->responseSuccess(
+            message: 'Warehouse stock summary retrieved successfully.',
+            data: $summary
+        );
+    }
+
     public function stockOnHandSummary(Request $request)
     {
-        return $this->stockHistorySummaryService
+        $summary = $this->stockHistorySummaryService
             ->getStockOnHandSummary($request->boolean('include_history'));
+
+        if ($summary->isEmpty()) {
+            return $this->responseNotFound(
+                message: 'No stock on hand summary found.'
+            );
+        }
+
+        return $this->responseSuccess(
+            message: 'Stock on hand summary retrieved successfully.',
+            data: $summary
+        );
     }
 
     public function exportStockHistory(Request $request)
@@ -101,6 +158,18 @@ class StockController extends Controller
         return Excel::download(
             new StockHistoryExport((int) $request->user()->id),
             'stock-history.xlsx'
+        );
+    }
+
+    public function exportStockWarehouseSummary(Request $request)
+    {
+        $validated = $request->validate([
+            'warehouse_id' => ['required', 'integer', 'exists:warehouses,id'],
+        ]);
+
+        return Excel::download(
+            new StockWarehouseHistoryExport((int) $validated['warehouse_id']),
+            'warehouse-stock-summary.xlsx'
         );
     }
 

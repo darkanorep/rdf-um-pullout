@@ -24,7 +24,16 @@ class TransferController extends Controller
             $filters['direction'] ?? 'all',
         );
 
-        return response()->json($results);
+        if ($results->isEmpty()) {
+            return response()->json([
+                'message' => 'No transfers found.',
+            ], 404);
+        }
+
+        return response()->json([
+            'message' => 'Transfers retrieved successfully.',
+            'data' => $results,
+        ]);
     }
 
     public function store(Request $request): JsonResponse

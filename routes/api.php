@@ -31,8 +31,11 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
 //        ->parameters(['move-orders' => 'moveOrder'])
         ->only(['index', 'store', 'show', 'update', 'destroy']);
     Route::get('stock-on-hand', [\App\Http\Controllers\StockController::class, 'getStockOnHand']);
+    Route::get('warehouse-stock-on-hand', [\App\Http\Controllers\StockController::class, 'getWarehouseStockOnHand']);
     Route::get('stock-on-hand-summary', [StockController::class, 'stockOnHandSummary']);
+    Route::get('warehouse-stock-on-hand-summary', [StockController::class, 'stockOnHandWarehouseSummary']);
     Route::get('/stock-on-hand-summary/export', [StockController::class, 'exportStockHistory']);
+    Route::get('/warehouse-stock-on-hand-summary/export', [StockController::class, 'exportStockWarehouseSummary']);
     Route::resource('misc-issues', \App\Http\Controllers\MiscellaneousController::class)
         ->only(['index', 'store', 'show', 'update', 'destroy']);
 
