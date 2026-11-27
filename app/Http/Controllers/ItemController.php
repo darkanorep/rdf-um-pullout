@@ -6,15 +6,16 @@ use App\Http\Requests\ItemRequest;
 use App\Http\Resources\ItemResource;
 use App\Models\Item;
 use App\Services\ItemService;
+use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 class ItemController extends Controller
 {
     public function __construct(private readonly ItemService $itemService) {}
 
-    public function index()
+    public function index(Request $request)
     {
-        $items = $this->itemService->getAllItems();
+        $items = $this->itemService->getAllItems($request->warehouse_id);
 
         if ($items->isEmpty()) {
             return $this->responseNotFound(message: 'No items found.');

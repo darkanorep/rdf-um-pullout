@@ -6,12 +6,13 @@ use App\Models\BondedWarehouse;
 use App\Services\TransferService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class TransferController extends Controller
 {
     public function __construct(private readonly TransferService $transfers) {}
 
-    public function index(Request $request): JsonResponse
+    public function index(Request $request)
     {
         $filters = $request->validate([
             'status' => ['nullable', 'in:pending,accepted,rejected'],
@@ -24,7 +25,23 @@ class TransferController extends Controller
             $filters['direction'] ?? 'all',
         );
 
-        return response()->json($results);
+        if ($results->isEmpty()) {
+            return response()->json([
+                'status' => 404,
+                'message' => 'No transfers found.',
+            ], 404);
+        }
+
+        $response = [
+            'status' => 200,
+            'message' => 'Transfers retrieved successfully.',
+        ];
+
+        if ($results instanceof LengthAwarePaginator) {
+            return response()->json(array_merge($response, $results->toArray()));
+        }
+
+        return $results;
     }
 
     public function store(Request $request): JsonResponse

@@ -71,7 +71,7 @@ class StockHistorySummaryService
     }
 
     /** Full summary query shared by the API and Excel export; it is not paginated. */
-    public function stockHistorySummaryQuery(int $userId): EloquentBuilder
+    public function stockHistorySummaryQuery(?int $userId = null, ?int $warehouseId = null): EloquentBuilder
     {
         $movedQuantities = DB::table('move_inventories as mi')
             ->select('mi.inventory_id')
@@ -180,14 +180,24 @@ class StockHistorySummaryService
             ->fromSub($totals, 'summary')
             ->join('users as u', 'u.id', '=', 'summary.user_id')
             ->join('items as item', 'item.id', '=', 'summary.item_id')
+            ->leftJoin('categories as item_category', 'item_category.id', '=', 'item.category_id')
+            ->leftJoin('unit_of_measurements as item_uom', 'item_uom.id', '=', 'item.uom_id')
+            ->leftJoin('warehouses as warehouse', 'warehouse.id', '=', 'u.warehouse_id')
             ->select([
                 'summary.user_id',
                 'u.first_name',
                 'u.last_name',
                 'summary.item_id as id',
                 'summary.item_id',
+                'u.warehouse_id as warehouse_id',
+                'warehouse.code as warehouse_code',
+                'warehouse.name as warehouse_name',
                 'item.code as item_code',
                 'item.name as item_name',
+                'item_category.name as item_category',
+                'item.uom_id',
+                'item_uom.name as uom',
+                'item_uom.symbol as uom_symbol',
                 'summary.received',
                 'summary.misc_receipt',
                 'summary.misc_issue',
@@ -200,10 +210,58 @@ class StockHistorySummaryService
         return $this->stock->newQueryWithoutScopes()
             ->fromSub($formatted, 'stock_summary')
             ->select('stock_summary.*')
-            ->where('stock_summary.user_id', $userId)
+            ->when(
+                $userId !== null,
+                fn ($query) => $query->where('stock_summary.user_id', $userId)
+            )
+            ->when(
+                $warehouseId !== null,
+                fn ($query) => $query->where('stock_summary.warehouse_id', $warehouseId)
+            )
             ->useFilters()
             ->orderBy('stock_summary.last_name')
             ->orderBy('stock_summary.item_name');
+    }
+
+    /** Item-level movement totals for all users assigned to one warehouse. */
+    public function stockWarehouseItemSummaryQuery(int $warehouseId): QueryBuilder
+    {
+        $summary = $this->stockHistorySummaryQuery(null, $warehouseId);
+
+        return DB::query()
+            ->fromSub($summary, 'user_item_summary')
+            ->select([
+                'user_item_summary.warehouse_id',
+                'user_item_summary.warehouse_code',
+                'user_item_summary.warehouse_name',
+                'user_item_summary.item_id',
+                'user_item_summary.item_code',
+                'user_item_summary.item_name',
+                'user_item_summary.item_category',
+                'user_item_summary.uom_id',
+                'user_item_summary.uom',
+                'user_item_summary.uom_symbol',
+            ])
+            ->selectRaw('COALESCE(SUM(user_item_summary.received), 0) AS received')
+            ->selectRaw('COALESCE(SUM(user_item_summary.misc_receipt), 0) AS misc_receipt')
+            ->selectRaw('COALESCE(SUM(user_item_summary.misc_issue), 0) AS misc_issue')
+            ->selectRaw('COALESCE(SUM(user_item_summary.move_order), 0) AS move_order')
+            ->selectRaw('COALESCE(SUM(user_item_summary.transfer_in), 0) AS transfer_in')
+            ->selectRaw('COALESCE(SUM(user_item_summary.transfer_out), 0) AS transfer_out')
+            ->selectRaw('COALESCE(SUM(user_item_summary.stock_on_hand), 0) AS stock_on_hand')
+            ->groupBy(
+                'user_item_summary.warehouse_id',
+                'user_item_summary.warehouse_code',
+                'user_item_summary.warehouse_name',
+                'user_item_summary.item_id',
+                'user_item_summary.item_code',
+                'user_item_summary.item_name',
+                'user_item_summary.item_category',
+                'user_item_summary.uom_id',
+                'user_item_summary.uom',
+                'user_item_summary.uom_symbol',
+            )
+            ->orderBy('user_item_summary.item_name');
     }
 
     /** Backward-compatible alias for callers that only need the balance query. */

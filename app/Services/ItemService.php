@@ -8,9 +8,12 @@ class ItemService
 {
     public function __construct(private readonly Item $item) {}
 
-    public function getAllItems()
+    public function getAllItems($warehouseId = null)
     {
         return $this->item->query()
+            ->when($warehouseId, function ($query, $warehouseId) {
+                $query->where('warehouse_id', $warehouseId);
+            })
             ->with(['warehouse', 'category', 'unitOfMeasurement'])
             ->orderBy('updated_at', 'desc')->useFilters()->dynamicPaginate();
     }
