@@ -117,11 +117,15 @@ class StockController extends Controller
     {
         $validated = $request->validate([
             'warehouse_id' => ['sometimes', 'integer', 'exists:warehouses,id'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'include_history' => ['sometimes', 'boolean'],
         ]);
 
         $summary = $this->stockHistorySummaryService
             ->getStockOnHandSummaryForAllWarehouses(
-                data_get($validated, 'warehouse_id')
+                data_get($validated, 'warehouse_id'),
+                data_get($validated, 'per_page'),
+                $request->boolean('include_history'),
             );
 
         if ($summary->isEmpty()) {
@@ -130,10 +134,13 @@ class StockController extends Controller
             );
         }
 
-        return $this->responseSuccess(
-            message: 'Warehouse stock summary retrieved successfully.',
-            data: $summary
-        );
+        return response()->json(array_merge(
+            [
+                'status' => 200,
+                'message' => 'Warehouse stock summary retrieved successfully.',
+            ],
+            $summary->toArray(),
+        ));
     }
 
     public function stockOnHandSummary(Request $request)
@@ -147,10 +154,13 @@ class StockController extends Controller
             );
         }
 
-        return $this->responseSuccess(
-            message: 'Stock on hand summary retrieved successfully.',
-            data: $summary
-        );
+        return response()->json(array_merge(
+            [
+                'status' => 200,
+                'message' => 'Stock on hand summary retrieved successfully.',
+            ],
+            $summary->toArray(),
+        ));
     }
 
     public function exportStockHistory(Request $request)

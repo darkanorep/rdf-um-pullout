@@ -6,6 +6,8 @@ use App\Models\Inventory;
 use App\Models\Stock;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 
@@ -201,7 +203,9 @@ class StockService
     }
 
     /** Return positive on-hand inventory grouped by item for one warehouse. */
-    public function getStockOnHandByWarehouse(?int $warehouseId = null): array
+    public function getStockOnHandByWarehouse(
+        ?int $warehouseId = null
+    ): LengthAwarePaginator|SupportCollection
     {
         $user = auth()->user();
 
@@ -259,7 +263,11 @@ class StockService
             ->useFilters()
             ->dynamicPaginate();
 
-        $inventoryRecords = $stocks->flatMap(function ($stock) {
+        $stockRows = $stocks instanceof LengthAwarePaginator
+            ? $stocks->getCollection()
+            : $stocks;
+
+        $inventoryRecords = $stockRows->flatMap(function ($stock) {
             return $stock->inventories->map(function ($inventory) use ($stock) {
                 $inventory->setAttribute('source_stock', [
                     'id' => $stock->id,
@@ -300,12 +308,13 @@ class StockService
             })
             ->values();
 
-        return [
-            'warehouse_id' => (int) $warehouse->id,
-            'warehouse_code' => $warehouse->code,
-            'warehouse_name' => $warehouse->name,
-            'items' => $items,
-        ];
+        if ($stocks instanceof LengthAwarePaginator) {
+            $stocks->setCollection($items);
+
+            return $stocks;
+        }
+
+        return $items;
     }
 
     public function truncateStocks(): void
