@@ -9,12 +9,12 @@ class RoleService
 {
     public function __construct(private readonly Role $role) {}
 
-    public function getAllRoles() 
+    public function getAllRoles()
     {
         return $this->role->query()->orderBy('updated_at', 'desc')->useFilters()->dynamicPaginate();
     }
 
-    public function storeRole(array $data): Raole
+    public function storeRole(array $data)
     {
         return $this->role->create($data);
     }
