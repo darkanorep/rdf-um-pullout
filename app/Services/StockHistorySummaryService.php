@@ -70,6 +70,138 @@ class StockHistorySummaryService
         return $rows;
     }
 
+    /**
+     * Return stock totals grouped by warehouse, with item detail and optional
+     * transaction history for the items on the current warehouse page.
+     */
+    public function getStockOnHandSummaryForAllWarehouses(
+        ?int $warehouseId = null,
+        ?int $perPage = null,
+        bool $includeHistory = false,
+    ): LengthAwarePaginator {
+        abort_unless(auth()->id(), 401, 'Authentication is required.');
+
+        $perPage = min(100, max(1, $perPage ?? (int) request()->input('per_page', 15)));
+        $summary = $this->stockHistorySummaryQuery(null, $warehouseId);
+
+        $warehousePage = DB::query()
+            ->fromSub($summary, 'user_item_summary')
+            ->select([
+                'user_item_summary.warehouse_id',
+                'user_item_summary.warehouse_code',
+                'user_item_summary.warehouse_name',
+            ])
+            ->selectRaw('COALESCE(SUM(user_item_summary.received), 0) AS received')
+            ->selectRaw('COALESCE(SUM(user_item_summary.misc_receipt), 0) AS misc_receipt')
+            ->selectRaw('COALESCE(SUM(user_item_summary.misc_issue), 0) AS misc_issue')
+            ->selectRaw('COALESCE(SUM(user_item_summary.move_order), 0) AS move_order')
+            ->selectRaw('COALESCE(SUM(user_item_summary.transfer_in), 0) AS transfer_in')
+            ->selectRaw('COALESCE(SUM(user_item_summary.transfer_out), 0) AS transfer_out')
+            ->selectRaw('COALESCE(SUM(user_item_summary.stock_on_hand), 0) AS stock_on_hand')
+            ->groupBy(
+                'user_item_summary.warehouse_id',
+                'user_item_summary.warehouse_code',
+                'user_item_summary.warehouse_name',
+            )
+            ->orderBy('user_item_summary.warehouse_name')
+            ->paginate($perPage);
+
+        $warehouseIds = $warehousePage->getCollection()
+            ->pluck('warehouse_id')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        $itemsByWarehouse = $warehouseIds === []
+            ? collect()
+            : $this->stockWarehouseItemSummaryQuery(null, $warehouseIds)
+                ->get()
+                ->groupBy('warehouse_id');
+
+        $itemIds = $itemsByWarehouse->flatten(1)
+            ->pluck('item_id')
+            ->unique()
+            ->values()
+            ->all();
+        $eventsByWarehouseItem = $includeHistory && $itemIds !== []
+            ? $this->historyEventsQuery(null, $itemIds, $warehouseId)
+                ->get()
+                ->groupBy(fn ($event) => $event->warehouse_id.':'.$event->item_id)
+            : collect();
+
+        $quantityFields = [
+            'received',
+            'misc_receipt',
+            'misc_issue',
+            'move_order',
+            'transfer_in',
+            'transfer_out',
+            'stock_on_hand',
+        ];
+
+        $warehousePage->setCollection($warehousePage->getCollection()->map(
+            function (object $row) use ($itemsByWarehouse, $quantityFields, $eventsByWarehouseItem, $includeHistory) {
+                $items = $itemsByWarehouse->get($row->warehouse_id, collect())
+                    ->map(function (object $itemRow) use ($quantityFields, $eventsByWarehouseItem, $includeHistory, $row) {
+                        $item = [
+                            'item_id' => $itemRow->item_id,
+                            'item_code' => $itemRow->item_code,
+                            'item_name' => $itemRow->item_name,
+                            'item_category' => $itemRow->item_category,
+                            'uom_id' => $itemRow->uom_id,
+                            'uom' => $itemRow->uom,
+                            'uom_symbol' => $itemRow->uom_symbol,
+                        ];
+
+                        foreach ($quantityFields as $field) {
+                            $item[$field] = $this->fromMilliQuantity(
+                                (int) round((float) $itemRow->{$field} * 1000)
+                            );
+                        }
+
+                        if ($includeHistory) {
+                            $events = $eventsByWarehouseItem->get(
+                                $row->warehouse_id.':'.$itemRow->item_id,
+                                collect(),
+                            );
+                            $balance = 0;
+                            $item['history'] = $events->map(function (object $event) use (&$balance) {
+                                $event->reference = ucfirst(str_replace('_', ' ', $event->movement_type))
+                                    .' #'.$event->reference_id;
+                                $balance += $this->toMilliQuantity((string) $event->quantity_in)
+                                    - $this->toMilliQuantity((string) $event->quantity_out);
+                                $event->balance_after = $this->fromMilliQuantity($balance);
+
+                                return $event;
+                            })->values();
+                        }
+
+                        return $item;
+                    })
+                    ->values();
+
+                $warehouse = [
+                    'warehouse_id' => $row->warehouse_id,
+                    'warehouse_code' => $row->warehouse_code,
+                    'warehouse_name' => $row->warehouse_name,
+                ];
+
+                foreach ($quantityFields as $field) {
+                    $warehouse[$field] = $this->fromMilliQuantity(
+                        (int) round((float) $row->{$field} * 1000)
+                    );
+                }
+
+                $warehouse['items'] = $items;
+
+                return $warehouse;
+            }
+        ));
+
+        return $warehousePage;
+    }
+
     /** Full summary query shared by the API and Excel export; it is not paginated. */
     public function stockHistorySummaryQuery(?int $userId = null, ?int $warehouseId = null): EloquentBuilder
     {
@@ -224,7 +356,7 @@ class StockHistorySummaryService
     }
 
     /** Item-level movement totals for all users assigned to one warehouse. */
-    public function stockWarehouseItemSummaryQuery(int $warehouseId): QueryBuilder
+    public function stockWarehouseItemSummaryQuery(?int $warehouseId = null, ?array $warehouseIds = null): QueryBuilder
     {
         $summary = $this->stockHistorySummaryQuery(null, $warehouseId);
 
@@ -261,6 +393,7 @@ class StockHistorySummaryService
                 'user_item_summary.uom',
                 'user_item_summary.uom_symbol',
             )
+            ->when($warehouseIds !== null, fn ($query) => $query->whereIn('user_item_summary.warehouse_id', $warehouseIds))
             ->orderBy('user_item_summary.item_name');
     }
 
@@ -274,7 +407,7 @@ class StockHistorySummaryService
      * Detailed events for the summary page. All source branches return the
      * same columns so they can be combined with UNION ALL.
      */
-    private function historyEventsQuery(int $userId, array $itemIds): QueryBuilder
+    private function historyEventsQuery(?int $userId, array $itemIds, ?int $warehouseId = null): QueryBuilder
     {
         if ($itemIds === []) {
             return DB::query()->fromSub(DB::table('inventories')->whereRaw('1 = 0'), 'empty_history')
@@ -386,7 +519,10 @@ class StockHistorySummaryService
 
         return DB::query()
             ->fromSub($union, 'history')
-            ->where('history.user_id', $userId)
+            ->join('users as history_user', 'history_user.id', '=', 'history.user_id')
+            ->select('history.*', 'history_user.warehouse_id')
+            ->when($userId !== null, fn ($query) => $query->where('history.user_id', $userId))
+            ->when($warehouseId !== null, fn ($query) => $query->where('history_user.warehouse_id', $warehouseId))
             ->whereIn('history.item_id', $itemIds)
             ->orderBy('history.event_date')
             ->orderBy('history.reference_id');
